@@ -5,6 +5,10 @@
 #include <SPIFFS.h>
 #include "system.h"
 
+bool stop_on_flame_detected = false;
+bool stop_on_fume_detected = false;
+bool stop_on_chamber_overheat = false;
+bool chamber_overheat_stop_temperature = 100; //deg C
 
 
 

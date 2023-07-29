@@ -12,7 +12,7 @@
 WiFiClient client;
 PubSubClient mqtt_client(client);
 
-StaticJsonDocument<1024> device_mqtt_config;
+StaticJsonDocument<2048> device_mqtt_config;
 bool mqtt_config_loaded = false;
 const char* device_mqtt_config_file = "/mqtt.json";
 
@@ -56,19 +56,34 @@ void load_mqtt_config() {
             strcpy(user, device_mqtt_config["user"]);
             strcpy(password, device_mqtt_config["psw"]);
 
-            cmd_topics = device_mqtt_config["cmd"].to<JsonObject>();
-            stat_topics = device_mqtt_config["stat"].to<JsonObject>();
+            cmd_topics = device_mqtt_config["cmd"].as<JsonObject>();
+            stat_topics = device_mqtt_config["stat"].as<JsonObject>();
 
             String constructed_topic = "";
             for (JsonPair kv: cmd_topics) {
-
+                constructed_topic = "device/";
+                constructed_topic += device_mqtt_config["id"].as<const char*>();
+                constructed_topic += "/cmd/";
+                constructed_topic += kv.value().as<const char*>();
+                cmd_topics[kv.key().c_str()] = String(constructed_topic.c_str()); // String() make a copy, 
+                                                                                // neccessary to prevent memeory leak
+#ifdef SERIAL_DEBUG
+                Serial.print("Cmd Topic: ");
+                Serial.println(cmd_topics[kv.key().c_str()].as<const char*>());
+#endif
             }
 
             for (JsonPair kv: stat_topics) {
-                
+                constructed_topic = "device/";
+                constructed_topic += device_mqtt_config["id"].as<const char*>();
+                constructed_topic += "/stat/";
+                constructed_topic += kv.value().as<const char*>();
+                stat_topics[kv.key().c_str()] = String(constructed_topic.c_str());
+#ifdef SERIAL_DEBUG
+                Serial.print("Stat Topic: ");
+                Serial.println(stat_topics[kv.key().c_str()].as<const char*>());
+#endif
             }
-            // load topics
-            // topic should be: device/<id>/<category>(cmd/stat/other)/topic, construct it here
         }
 #ifdef SERIAL_DEBUG
         
@@ -118,13 +133,32 @@ void callback(char* topic, byte* payload, unsigned int length) {
         
     }
 
+    if (strcmp(topic, cmd_topics["enable_on_flame_stop"].as<const char*>()) == 0) {
+        Serial.println("Command on enable_on_flame_stop arrived");
+        // {enabled: true}
+    } else if (strcmp(topic, cmd_topics["enable_on_fume_stop"].as<const char*>()) == 0) {
+        Serial.println("Command on enable_on_fume_stop arrived");
+        // {enabled: true}
+    } else if (strcmp(topic, cmd_topics["stop_on_chamber_temp_greater_than"].as<const char*>()) == 0) {
+        Serial.println("Command on stop_on_chamber_temp_greater_than arrived");
+        // {enabled: true, temp: 100}
+    }
+
     serializeJsonPretty(payload_buffer, Serial);
     Serial.println();
 }
 
 void subscribe() {
+    for (JsonPair kv: cmd_topics) {
+        const char* topic = kv.value().as<const char*>();
+        mqtt_client.subscribe(topic);
+#ifdef SERIAL_DEBUG
+        Serial.print("Subscribing Topic: ");
+        Serial.println(topic);
+#endif
+    }
     mqtt_client.subscribe("state/test_json");
-    Serial.println("Subscribing");
+    Serial.println("Subscribing to test");
 }
 
 void reconnect() {
@@ -135,11 +169,12 @@ void reconnect() {
     //     else delay(500);
     //     Serial.println("try");
     // }
-    Serial.println("connected");
+    // Serial.println("connected");
     if (mqtt_client.connect(device_name, user, password)) {
         subscribe();
         Serial.println("connected");
     }
+    delay(500);
     // delay(500);
     
 }
