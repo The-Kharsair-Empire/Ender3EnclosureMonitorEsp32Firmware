@@ -7,6 +7,7 @@
 #include "config.h"
 #include "wifi_connectivity.h"
 #include <ArduinoJson.h>
+#include "moonraker.h"
 
 // WiFiClientSecure client; // May depends on Server, Bambulab X1C might need secure client
 WiFiClient client;
@@ -133,6 +134,20 @@ void callback(char* topic, byte* payload, unsigned int length) {
         
     }
 
+    if (payload_buffer.containsKey("stop")) {
+        if (strcmp(payload_buffer["stop"], "yes") == 0) {
+#ifdef SERIAL_DEBUG
+            Serial.println("Emergency Stop Starting");
+#endif
+            start_emergency_stop_task();
+        } else {
+            Serial.println("unknowned command");
+        }
+        
+    }
+
+    
+
     if (strcmp(topic, cmd_topics["enable_on_flame_stop"].as<const char*>()) == 0) {
         Serial.println("Command on enable_on_flame_stop arrived");
         // {enabled: true}
@@ -162,56 +177,69 @@ void subscribe() {
 }
 
 void reconnect() {
-    // while(! mqtt_client.connected()) {
-    //     if (mqtt_client.connect(device_name, user, password)) {
-    //         subscribe();
-    //     }
-    //     else delay(500);
-    //     Serial.println("try");
-    // }
-    // Serial.println("connected");
-    if (mqtt_client.connect(device_name, user, password)) {
-        subscribe();
-        Serial.println("connected");
+    while(! mqtt_client.connected()) {
+        if (mqtt_client.connect(device_name, user, password)) {
+            subscribe();
+        }
+        else vTaskDelay(500 / portTICK_PERIOD_MS);
+        // Serial.println("try");
     }
-    delay(500);
+    Serial.println("mqtt connected");
+    // if (mqtt_client.connect(device_name, user, password)) {
+    //     subscribe();
+    //     Serial.println("connected");
+    // }
+    // delay(500);
     // delay(500);
     
 }
 
-void mqtt_setup() {
-    load_mqtt_config();
-    // client.setInsecure();
-    mqtt_client.setBufferSize(2048);
-    mqtt_client.setServer(host_ip, port);
-    reconnect();
-    mqtt_client.setCallback(callback);
-}
 
 void mqtt_loop() {
-    if (wifi_connected() && !mqtt_client.connected()) {
-        reconnect();
-        Serial.println("retry mqtt connection");
-    }
-    mqtt_client.loop();
+    delay(1000);
+    while (1) {
+        if (wifi_connected() && !mqtt_client.connected()) {
+            reconnect();
+            Serial.println("retry mqtt connection");
+        }
+        mqtt_client.loop();
 
-    //test code:
-    now = millis();
-    if (should_publish) {
-        if (now - prev > 5000) {
-            prev = now;
-            payload_buffer.clear();
-            payload_buffer["time"] = now;
-            // payload_buffer["no"] = "no";
-            payload_string.clear();
-            serializeJson(payload_buffer, payload_string);
-            mqtt_client.publish(publish_test_topic, payload_string.c_str());
+        //test code:
+        now = millis();
+        if (should_publish) {
+            if (now - prev > 5000) {
+                prev = now;
+                payload_buffer.clear();
+                payload_buffer["time"] = now;
+                // payload_buffer["no"] = "no";
+                payload_string.clear();
+                serializeJson(payload_buffer, payload_string);
+                mqtt_client.publish(publish_test_topic, payload_string.c_str());
+            }
         }
     }
+
+    
 }
 
 // publishing strategy, every time published, keep the published sensor value, then compare new value to it
 // if new value is different, then publish.
 // also set minimum interval.
+
+
+void mqtt_setup(void*) {
+    load_mqtt_config();
+    // client.setInsecure();
+    while (!wifi_connected()) { // wait for wifi to connect first
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+    }
+    mqtt_client.setBufferSize(2048);
+    mqtt_client.setServer(host_ip, port);
+    reconnect(); // it will crash if wifi is not connected
+    mqtt_client.setCallback(callback);
+
+    mqtt_loop();
+}
+
 
 #endif

@@ -21,6 +21,26 @@ char dns[16];
 char subnet[16];
 #endif
 
+bool wifi_connected() {
+    return WiFi.status() == WL_CONNECTED;
+}
+
+void wifi_check_reconnect_loop() {
+
+    delay(1000);
+    while (1) {
+        if (!wifi_connected()) {
+            WiFi.disconnect();
+            WiFi.reconnect();
+            delay(4000);
+
+            if (!wifi_connected()) {
+                ESP.restart();
+            }
+        }
+    }
+    
+}
 
 bool wifi_creds_setup() {
 
@@ -78,7 +98,10 @@ bool parse_ip_addr(char* ip_str, IPAddress& out_ip) {
 #endif
 
 
-void wifi_setup() {
+void wifi_setup(void*) {
+    WiFi.disconnect();
+    
+    
     if (wifi_creds_setup()) {
         WiFi.mode(WIFI_STA);
 #ifdef USE_STATIC_IP
@@ -96,22 +119,13 @@ void wifi_setup() {
         Serial.println("Cannot connect to wifi due to supplied config file issue, proceed without wifi");
     }           
 #endif  
-}
-
-bool wifi_connected() {
-    return WiFi.status() == WL_CONNECTED;
-}
-
-void wifi_check_reconnect() {
-    if (!wifi_connected()) {
-        WiFi.disconnect();
-        WiFi.reconnect();
-        delay(4000);
-
-        if (!wifi_connected()) {
-            ESP.restart();
-        }
+    while (!wifi_connected()) {
+        vTaskDelay(500 / portTICK_PERIOD_MS);
     }
+
+    wifi_check_reconnect_loop();
 }
+
+
 
 #endif
