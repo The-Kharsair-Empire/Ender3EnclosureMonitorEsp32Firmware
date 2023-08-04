@@ -5,6 +5,7 @@
 
 TaskHandle_t wifi_task;
 TaskHandle_t mqtt_task;
+TaskHandle_t dht_task;
 
 void setup() {
 #ifdef SERIAL_DEBUG
@@ -34,6 +35,16 @@ void setup() {
         NULL,
         1,
         &mqtt_task,
+        app_cpu
+    );
+
+    xTaskCreatePinnedToCore(
+        &dht_sample_loop,
+        "DHT22 Task",
+        2048,
+        NULL,
+        1,
+        &dht_task,
         app_cpu
     );
 

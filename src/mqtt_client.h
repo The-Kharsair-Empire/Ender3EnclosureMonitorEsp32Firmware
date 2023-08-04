@@ -8,6 +8,7 @@
 #include "wifi_connectivity.h"
 #include <ArduinoJson.h>
 #include "moonraker.h"
+#include "dht22.h"
 
 // WiFiClientSecure client; // May depends on Server, Bambulab X1C might need secure client
 WiFiClient client;
@@ -16,8 +17,6 @@ PubSubClient mqtt_client(client);
 StaticJsonDocument<2048> device_mqtt_config;
 bool mqtt_config_loaded = false;
 const char* device_mqtt_config_file = "/mqtt.json";
-
-// const size_t CAPACITY = JSON_ARRAY_SIZE(10);
 
 char host_ip[16];
 char device_id[50];
@@ -29,10 +28,20 @@ int32_t port;
 StaticJsonDocument<2048> payload_buffer; // payload buffer;
 String payload_string;
 
-// StaticJsonDocument<CAPACITY> cmds;
-// StaticJsonDocument<CAPACITY> stats;
 JsonObject cmd_topics;
 JsonObject stat_topics;
+
+//////// variable updated by mqtt subscription
+bool e_stop_on_flame_detected = false;
+bool e_stop_on_mq2_fume_detected = false;
+bool e_stop_on_mq135_fume_detected = false;
+bool e_stop_on_overheat = false;
+float e_stop_overheat_temperature = 100.f; // C
+bool should_publish = false;
+unsigned int publish_interval = 10000; //ms
+///////////////
+
+unsigned long prev = 0, now = 0;
 
 void load_mqtt_config() {
     if (!mqtt_config_loaded) {
@@ -61,7 +70,7 @@ void load_mqtt_config() {
             stat_topics = device_mqtt_config["stat"].as<JsonObject>();
 
             String constructed_topic = "";
-            for (JsonPair kv: cmd_topics) {
+            for (const JsonPair& kv: cmd_topics) {
                 constructed_topic = "device/";
                 constructed_topic += device_mqtt_config["id"].as<const char*>();
                 constructed_topic += "/cmd/";
@@ -74,7 +83,7 @@ void load_mqtt_config() {
 #endif
             }
 
-            for (JsonPair kv: stat_topics) {
+            for (const JsonPair& kv: stat_topics) {
                 constructed_topic = "device/";
                 constructed_topic += device_mqtt_config["id"].as<const char*>();
                 constructed_topic += "/stat/";
@@ -108,9 +117,9 @@ void load_mqtt_config() {
 }
 
 //some test code:
-bool should_publish = false;
+
 const char* publish_test_topic = "state/test_publish";
-unsigned long prev = 0, now = 0;
+
 
 void callback(char* topic, byte* payload, unsigned int length) {
     Serial.println(topic);
@@ -123,28 +132,28 @@ void callback(char* topic, byte* payload, unsigned int length) {
         return;
     }
 
-    if (payload_buffer.containsKey("publish")) {
-        if (strcmp(payload_buffer["publish"], "yes") == 0) {
-            should_publish = true;
-        } else if (strcmp(payload_buffer["publish"], "no") == 0) {
-            should_publish = false;
-        } else {
-            Serial.println("unknowned command");
-        }
+//     if (payload_buffer.containsKey("publish")) {
+//         if (strcmp(payload_buffer["publish"], "yes") == 0) {
+//             should_publish = true;
+//         } else if (strcmp(payload_buffer["publish"], "no") == 0) {
+//             should_publish = false;
+//         } else {
+//             Serial.println("unknowned command");
+//         }
         
-    }
+//     }
 
-    if (payload_buffer.containsKey("stop")) {
-        if (strcmp(payload_buffer["stop"], "yes") == 0) {
-#ifdef SERIAL_DEBUG
-            Serial.println("Emergency Stop Starting");
-#endif
-            start_emergency_stop_task();
-        } else {
-            Serial.println("unknowned command");
-        }
+//     if (payload_buffer.containsKey("stop")) {
+//         if (strcmp(payload_buffer["stop"], "yes") == 0) {
+// #ifdef SERIAL_DEBUG
+//             Serial.println("Emergency Stop Starting");
+// #endif
+//             start_emergency_stop_task();
+//         } else {
+//             Serial.println("unknowned command");
+//         }
         
-    }
+//     }
 
     
 
@@ -154,17 +163,19 @@ void callback(char* topic, byte* payload, unsigned int length) {
     } else if (strcmp(topic, cmd_topics["enable_on_fume_stop"].as<const char*>()) == 0) {
         Serial.println("Command on enable_on_fume_stop arrived");
         // {enabled: true}
-    } else if (strcmp(topic, cmd_topics["stop_on_chamber_temp_greater_than"].as<const char*>()) == 0) {
+    } else if (strcmp(topic, cmd_topics["enable_overheat_stop"].as<const char*>()) == 0) {
         Serial.println("Command on stop_on_chamber_temp_greater_than arrived");
         // {enabled: true, temp: 100}
+    } else if (strcmp(topic, cmd_topics["publish_interval"].as<const char*>()) == 0) {
+        // {enabled: true, interval: 10000}
     }
 
-    serializeJsonPretty(payload_buffer, Serial);
-    Serial.println();
+    // serializeJsonPretty(payload_buffer, Serial);
+    // Serial.println();
 }
 
 void subscribe() {
-    for (JsonPair kv: cmd_topics) {
+    for (const JsonPair& kv: cmd_topics) {
         const char* topic = kv.value().as<const char*>();
         mqtt_client.subscribe(topic);
 #ifdef SERIAL_DEBUG
@@ -172,8 +183,8 @@ void subscribe() {
         Serial.println(topic);
 #endif
     }
-    mqtt_client.subscribe("state/test_json");
-    Serial.println("Subscribing to test");
+    // mqtt_client.subscribe("state/test_json");
+    // Serial.println("Subscribing to test");
 }
 
 void reconnect() {
@@ -185,6 +196,18 @@ void reconnect() {
         // Serial.println("try");
     }
     Serial.println("mqtt connected");
+
+    // sending birth message
+    payload_buffer.clear();
+    payload_string.clear();
+
+    payload_buffer["birth"] = "true";
+    payload_buffer["timestamp"] = millis(); //replace later with real time
+    
+    serializeJson(payload_buffer, payload_string);
+    mqtt_client.publish(stat_topics["birth"].as<const char*>(), 
+                        payload_string.c_str(), 
+                        true);
     // if (mqtt_client.connect(device_name, user, password)) {
     //     subscribe();
     //     Serial.println("connected");
@@ -204,22 +227,36 @@ void mqtt_loop() {
         }
         mqtt_client.loop();
 
-        //test code:
         now = millis();
         if (should_publish) {
-            if (now - prev > 5000) {
+            if (now - prev > publish_interval) {
                 prev = now;
-                payload_buffer.clear();
-                payload_buffer["time"] = now;
-                // payload_buffer["no"] = "no";
-                payload_string.clear();
-                serializeJson(payload_buffer, payload_string);
-                mqtt_client.publish(publish_test_topic, payload_string.c_str());
+                for (const JsonPair& kv: stat_topics) {
+                    payload_buffer.clear();
+                    payload_string.clear();
+
+                    const char* topic_key = kv.key().c_str();
+
+                    if (strcmp(topic_key, "humidity") == 0) {
+                        payload_buffer["timestamp"] = now;
+
+                        double humidity = get_dht_humidity();
+                        // if (humidity == last_dht_humidity) {
+                        //     continue;
+                        // } else {
+                        //     payload_buffer["humidity"] = humidity;
+                        // }
+                    } else if (strcmp(topic_key, "temperature") == 0) {
+                        
+                    }
+                
+                    serializeJson(payload_buffer, payload_string);
+                    mqtt_client.publish(kv.value().as<const char*>(), payload_string.c_str());
+                }
+                
             }
         }
     }
-
-    
 }
 
 // publishing strategy, every time published, keep the published sensor value, then compare new value to it

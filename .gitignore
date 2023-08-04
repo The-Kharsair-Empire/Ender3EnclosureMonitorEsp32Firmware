@@ -3,6 +3,7 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+.idea/
 data/mqtt.json
 data/wifi.json
 data/moonraker.json

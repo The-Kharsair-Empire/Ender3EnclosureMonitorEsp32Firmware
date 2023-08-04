@@ -18,6 +18,23 @@ bool chamber_overheat_stop_temperature = 100; //deg C
   static const BaseType_t request_cpu = 0;
 #endif
 
+#ifdef __cplusplus
+
+extern "C" {
+
+#endif
+
+uint8_t temprature_sens_read();
+
+#ifdef __cplusplus
+
+}
+
+#endif
+
+uint8_t get_cpu_temp_in_c() {
+    return (temprature_sens_read() - 32) / 1.8;
+}
 
 
 bool load_config(JsonDocument& json, const char* filename) {
