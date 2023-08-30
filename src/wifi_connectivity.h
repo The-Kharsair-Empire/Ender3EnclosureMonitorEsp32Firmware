@@ -71,7 +71,6 @@ bool wifi_creds_setup() {
 
         } else {
 #ifdef SERIAL_DEBUG
-            initialize_serial();
             Serial.println("Missing Wifi Config, refer to function wifi_creds_setup");
 #endif    
             return false;
@@ -115,7 +114,6 @@ void wifi_setup(void*) {
     }
 #ifdef SERIAL_DEBUG
     else {
-        initialize_serial();
         Serial.println("Cannot connect to wifi due to supplied config file issue, proceed without wifi");
     }           
 #endif  

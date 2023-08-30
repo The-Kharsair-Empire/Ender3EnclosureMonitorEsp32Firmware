@@ -7,10 +7,8 @@
 #define DHT_DATA 16
 #define DHT_TYPE DHT22
 
-double filtered_dht_temperature;
-double filtered_dht_humidity;
-
-bool is_dht_setup = false;
+volatile double filtered_dht_temperature;
+volatile double filtered_dht_humidity;
 
 DHT dht22(DHT_DATA, DHT_TYPE);
 
@@ -31,13 +29,31 @@ double get_dht_humidity() {
 }
 
 void dht_sample_loop(void*) {
-    if (!is_dht_setup) {
-        dht22.begin();
+
+    dht22.begin();
+    while (isnan(dht22.readTemperature())) {
+        vTaskDelay(dht_sample_interval / portTICK_PERIOD_MS);
     }
+    while (isnan(dht22.readHumidity())) {
+        vTaskDelay(dht_sample_interval / portTICK_PERIOD_MS);
+    }
+    // initial read otherwise history will be 0
+    filtered_dht_humidity = dht22.readHumidity();
+    filtered_dht_temperature = dht22.readTemperature();
 
     while (1) {
-        filtered_dht_humidity += (dht22.readHumidity() - filtered_dht_humidity) * dht_humidity_alpha;
-        filtered_dht_temperature += (dht22.readTemperature() - filtered_dht_temperature) * dht_temperature_alpha;
+        float humidity = dht22.readHumidity();
+        float temperature = dht22.readTemperature();
+        if (!isnan(humidity)) {
+            filtered_dht_humidity += (humidity - filtered_dht_humidity) * dht_humidity_alpha;
+        }
+        if (!isnan(temperature)) {
+            filtered_dht_temperature += (temperature - filtered_dht_temperature) * dht_temperature_alpha;
+        }
+        
+        
+        
+        
         vTaskDelay(dht_sample_interval / portTICK_PERIOD_MS);
     }
 }

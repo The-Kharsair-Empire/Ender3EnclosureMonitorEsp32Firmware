@@ -9,6 +9,7 @@
 #include <ArduinoJson.h>
 #include "moonraker.h"
 #include "dht22.h"
+#include "ds18b20.h"
 
 // WiFiClientSecure client; // May depends on Server, Bambulab X1C might need secure client
 WiFiClient client;
@@ -37,7 +38,7 @@ bool e_stop_on_mq2_fume_detected = false;
 bool e_stop_on_mq135_fume_detected = false;
 bool e_stop_on_overheat = false;
 float e_stop_overheat_temperature = 100.f; // C
-bool should_publish = false;
+bool should_publish = true;
 unsigned int publish_interval = 10000; //ms
 ///////////////
 
@@ -98,10 +99,8 @@ void load_mqtt_config() {
 #ifdef SERIAL_DEBUG
         
         else {
-            initialize_serial();
             Serial.println("Missing MQTT Config, refer to function load_mqtt_config");
         }
-        initialize_serial();
         Serial.print("server ip: "); Serial.println(host_ip);
         Serial.print("server port: "); Serial.println(port);
         Serial.print("name: "); Serial.println(device_name);
@@ -122,13 +121,19 @@ const char* publish_test_topic = "state/test_publish";
 
 
 void callback(char* topic, byte* payload, unsigned int length) {
+
+#ifdef SERIAL_DEBUG
     Serial.println(topic);
-    // Serial.println((char*) payload);
+#endif
+
     payload_buffer.clear();
     DeserializationError error = deserializeJson(payload_buffer, payload, length);
+
     if (error) {
+#ifdef SERIAL_DEBUG
         Serial.print(F("deserializeJson() failed: "));
         Serial.println(error.c_str());
+#endif
         return;
     }
 
@@ -195,14 +200,18 @@ void reconnect() {
         else vTaskDelay(500 / portTICK_PERIOD_MS);
         // Serial.println("try");
     }
+#ifdef SERIAL_DEBUG
     Serial.println("mqtt connected");
-
+#endif
     // sending birth message
     payload_buffer.clear();
     payload_string.clear();
 
+
+
     payload_buffer["birth"] = "true";
-    payload_buffer["timestamp"] = millis(); //replace later with real time
+    payload_buffer["timestamp"] = millis(); 
+    payload_buffer["real_time"] = "";
     
     serializeJson(payload_buffer, payload_string);
     mqtt_client.publish(stat_topics["birth"].as<const char*>(), 
@@ -223,7 +232,9 @@ void mqtt_loop() {
     while (1) {
         if (wifi_connected() && !mqtt_client.connected()) {
             reconnect();
+#ifdef SERIAL_DEBUG
             Serial.println("retry mqtt connection");
+#endif
         }
         mqtt_client.loop();
 
@@ -232,26 +243,33 @@ void mqtt_loop() {
             if (now - prev > publish_interval) {
                 prev = now;
                 for (const JsonPair& kv: stat_topics) {
-                    payload_buffer.clear();
-                    payload_string.clear();
-
                     const char* topic_key = kv.key().c_str();
+                    if (strcmp(topic_key, "birth") != 0) {
+                        payload_buffer.clear();
+                        payload_string.clear();
 
-                    if (strcmp(topic_key, "humidity") == 0) {
-                        payload_buffer["timestamp"] = now;
-
-                        double humidity = get_dht_humidity();
-                        // if (humidity == last_dht_humidity) {
-                        //     continue;
-                        // } else {
-                        //     payload_buffer["humidity"] = humidity;
-                        // }
-                    } else if (strcmp(topic_key, "temperature") == 0) {
                         
+
+                        if (strcmp(topic_key, "humidity") == 0) {
+                            payload_buffer["timestamp"] = now;
+
+                            double humidity = get_dht_humidity();
+                            payload_buffer["humidity"] = humidity;
+        
+                        } else if (strcmp(topic_key, "temperature") == 0) {
+                            payload_buffer["timestamp"] = now;
+                            double temperature = get_dht_temperature();
+                            payload_buffer["temperature_dht"] = temperature;
+                            temperature = get_ds18b20_temperature();
+                            payload_buffer["temperature_ds18b20"] = temperature;
+                            // temperature = get_cpu_temp_in_c();
+                            // payload_buffer["cpu_temperature"] = temperature;
+                        }
+                    
+                        serializeJson(payload_buffer, payload_string);
+                        mqtt_client.publish(kv.value().as<const char*>(), payload_string.c_str());
                     }
-                
-                    serializeJson(payload_buffer, payload_string);
-                    mqtt_client.publish(kv.value().as<const char*>(), payload_string.c_str());
+                    
                 }
                 
             }

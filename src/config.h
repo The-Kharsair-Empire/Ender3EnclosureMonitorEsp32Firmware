@@ -18,23 +18,26 @@ bool chamber_overheat_stop_temperature = 100; //deg C
   static const BaseType_t request_cpu = 0;
 #endif
 
-#ifdef __cplusplus
+// built in hardware temperature sensor is long obsoleted
+// #ifdef __cplusplus
 
-extern "C" {
+// extern "C" {
 
-#endif
+// #endif
 
-uint8_t temprature_sens_read();
+// uint8_t temprature_sens_read();
 
-#ifdef __cplusplus
+// #ifdef __cplusplus
 
-}
+// }
 
-#endif
+// #endif
 
-uint8_t get_cpu_temp_in_c() {
-    return (temprature_sens_read() - 32) / 1.8;
-}
+// uint8_t temprature_sens_read();
+
+// uint8_t get_cpu_temp_in_c() {
+//     return (temprature_sens_read() - 32) / 1.8;
+// }
 
 
 bool load_config(JsonDocument& json, const char* filename) {

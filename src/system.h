@@ -6,7 +6,7 @@
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 
-#define SERIAL_DEBUG
+// #define SERIAL_DEBUG
 // #define ERASE_DEVICE_CONFIG
 // #define ERASE_WIFI_CONFIG
 #define USE_STATIC_IP

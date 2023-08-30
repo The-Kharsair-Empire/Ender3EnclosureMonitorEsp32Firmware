@@ -26,6 +26,57 @@ bool is_flame_detected_digital() {
     return digitalRead(FLAME_DIGITAL) == HIGH;
 }
 
+// reference code from arduino test project below:
+
+// #define FLAME A3
+// #define FLAME_DIGITAL 2
+// #define ALARM 8
+// #define LED 13
+
+// float fire_level;
+// int fire;
+
+// int interval = 1000;
+// unsigned long prev = 0, now = 0;
+
+// void setup() {
+//     Serial.begin(9600);
+//     pinMode(FLAME, INPUT);
+//     pinMode(FLAME_DIGITAL, INPUT);
+//     pinMode(ALARM, OUTPUT);
+//     pinMode(LED, OUTPUT);
+
+// }
+
+
+// void loop() {
+//     fire_level = analogRead(FLAME);
+//     Serial.println(fire_level);
+
+//     int intensity = map(fire_level, 0, 1023, 0, 7);
+
+//     interval = 2 * 100 * intensity;
+
+//     fire = digitalRead(FLAME_DIGITAL);
+
+//     if (fire == HIGH) {
+//         digitalWrite(ALARM, HIGH);
+//     } else {
+//         digitalWrite(ALARM, LOW);
+//     }
+
+//     // now = millis();
+//     // if (now - prev > interval) {
+//     //     prev = now;
+//     //     digitalWrite(ALARM, HIGH);
+//     //     delay(100);
+//     //     digitalWrite(ALARM, LOW);
+//     // }
+
+
+//     delay(500);
+
+// }
 
 
 
