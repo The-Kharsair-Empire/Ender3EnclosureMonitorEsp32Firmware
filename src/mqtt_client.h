@@ -10,6 +10,7 @@
 #include "moonraker.h"
 #include "dht22.h"
 #include "ds18b20.h"
+#include "buzzer.h"
 
 // WiFiClientSecure client; // May depends on Server, Bambulab X1C might need secure client
 WiFiClient client;
@@ -242,6 +243,16 @@ void mqtt_loop() {
         if (should_publish) {
             if (now - prev > publish_interval) {
                 prev = now;
+                // xTaskCreatePinnedToCore(
+                //     &sound_alarm,
+                //     "Alarm Task",
+                //     2048,
+                //     (void*) &param_play_second,
+                //     1,
+                //     &buzzer_task_handle,
+                //     app_cpu
+                // );
+                toggle();
                 for (const JsonPair& kv: stat_topics) {
                     const char* topic_key = kv.key().c_str();
                     if (strcmp(topic_key, "birth") != 0) {

@@ -51,13 +51,8 @@ void dht_sample_loop(void*) {
             filtered_dht_temperature += (temperature - filtered_dht_temperature) * dht_temperature_alpha;
         }
         
-        
-        
-        
         vTaskDelay(dht_sample_interval / portTICK_PERIOD_MS);
     }
 }
-
-
 
 #endif
