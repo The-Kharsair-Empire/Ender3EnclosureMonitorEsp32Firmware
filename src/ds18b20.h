@@ -24,7 +24,7 @@ void ds18b20_sample_loop(void*) {
     ds18b20.begin();
     ds18b20.requestTemperatures();
     while (isnan(ds18b20.getTempCByIndex(0))) {
-        vTaskDelay(dht_sample_interval / portTICK_PERIOD_MS);
+        vTaskDelay(ds18bb20_sample_interval / portTICK_PERIOD_MS);
         ds18b20.requestTemperatures();
     }
 

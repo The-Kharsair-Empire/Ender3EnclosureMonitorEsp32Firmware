@@ -2,13 +2,18 @@
 #include "wifi_connectivity.h"
 #include "mqtt_client.h"
 #include "config.h"
+#include "two_color_led.h"
+#include "flame_sensor.h"
 
 TaskHandle_t wifi_task;
 TaskHandle_t mqtt_task;
 TaskHandle_t dht_task;
 TaskHandle_t ds18b20_task;
+TaskHandle_t fire_sensor_analog_task, led_alert_task;
+
 
 void setup() {
+    
 #ifdef SERIAL_DEBUG
     initialize_serial();
     
@@ -46,7 +51,7 @@ void setup() {
         NULL,
         1,
         &dht_task,
-        request_cpu
+        app_cpu
     );
 
     xTaskCreatePinnedToCore(
@@ -56,7 +61,27 @@ void setup() {
         NULL,
         1,
         &ds18b20_task,
-        request_cpu
+        app_cpu
+    );
+
+    xTaskCreatePinnedToCore(
+        &analog_flame_sample_loop,
+        "Fire Sensor Task",
+        2048,
+        NULL,
+        1,
+        &fire_sensor_analog_task,
+        app_cpu
+    );
+
+    xTaskCreatePinnedToCore(
+        &led_alert_loop,
+        "LED Task",
+        2048,
+        NULL,
+        1,
+        &led_alert_task,
+        app_cpu
     );
 
     vTaskDelete(NULL); // setup and loop task should terminate here.

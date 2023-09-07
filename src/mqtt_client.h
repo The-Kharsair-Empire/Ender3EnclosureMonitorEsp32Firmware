@@ -10,7 +10,7 @@
 #include "moonraker.h"
 #include "dht22.h"
 #include "ds18b20.h"
-#include "buzzer.h"
+#include "flame_sensor.h"
 
 // WiFiClientSecure client; // May depends on Server, Bambulab X1C might need secure client
 WiFiClient client;
@@ -116,11 +116,6 @@ void load_mqtt_config() {
 #endif  
 }
 
-//some test code:
-
-const char* publish_test_topic = "state/test_publish";
-
-
 void callback(char* topic, byte* payload, unsigned int length) {
 
 #ifdef SERIAL_DEBUG
@@ -161,19 +156,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
         
 //     }
 
-    
 
-    if (strcmp(topic, cmd_topics["enable_on_flame_stop"].as<const char*>()) == 0) {
-        Serial.println("Command on enable_on_flame_stop arrived");
-        // {enabled: true}
-    } else if (strcmp(topic, cmd_topics["enable_on_fume_stop"].as<const char*>()) == 0) {
-        Serial.println("Command on enable_on_fume_stop arrived");
-        // {enabled: true}
-    } else if (strcmp(topic, cmd_topics["enable_overheat_stop"].as<const char*>()) == 0) {
-        Serial.println("Command on stop_on_chamber_temp_greater_than arrived");
-        // {enabled: true, temp: 100}
-    } else if (strcmp(topic, cmd_topics["publish_interval"].as<const char*>()) == 0) {
+    if (strcmp(topic, cmd_topics["settings"].as<const char*>()) == 0) {
         // {enabled: true, interval: 10000}
+        if (payload_buffer.containsKey("publish_interval")) {
+            // {interval: 10000}
+        }
     }
 
     // serializeJsonPretty(payload_buffer, Serial);
@@ -199,7 +187,6 @@ void reconnect() {
             subscribe();
         }
         else vTaskDelay(500 / portTICK_PERIOD_MS);
-        // Serial.println("try");
     }
 #ifdef SERIAL_DEBUG
     Serial.println("mqtt connected");
@@ -208,22 +195,13 @@ void reconnect() {
     payload_buffer.clear();
     payload_string.clear();
 
-
-
     payload_buffer["birth"] = "true";
     payload_buffer["timestamp"] = millis(); 
-    payload_buffer["real_time"] = "";
     
     serializeJson(payload_buffer, payload_string);
     mqtt_client.publish(stat_topics["birth"].as<const char*>(), 
                         payload_string.c_str(), 
                         true);
-    // if (mqtt_client.connect(device_name, user, password)) {
-    //     subscribe();
-    //     Serial.println("connected");
-    // }
-    // delay(500);
-    // delay(500);
     
 }
 
@@ -236,49 +214,54 @@ void mqtt_loop() {
 #ifdef SERIAL_DEBUG
             Serial.println("retry mqtt connection");
 #endif
+        } else if (!wifi_connected()) {
+            if (mqtt_client.connected())
+                mqtt_client.disconnect();
+            continue;
         }
         mqtt_client.loop();
 
-        now = millis();
+        
         if (should_publish) {
+            now = millis();
             if (now - prev > publish_interval) {
                 prev = now;
-                // xTaskCreatePinnedToCore(
-                //     &sound_alarm,
-                //     "Alarm Task",
-                //     2048,
-                //     (void*) &param_play_second,
-                //     1,
-                //     &buzzer_task_handle,
-                //     app_cpu
-                // );
-                toggle();
+                
                 for (const JsonPair& kv: stat_topics) {
                     const char* topic_key = kv.key().c_str();
                     if (strcmp(topic_key, "birth") != 0) {
                         payload_buffer.clear();
                         payload_string.clear();
 
-                        
-
                         if (strcmp(topic_key, "humidity") == 0) {
-                            payload_buffer["timestamp"] = now;
+                            payload_buffer["timestamp"] = millis();
 
                             double humidity = get_dht_humidity();
                             payload_buffer["humidity"] = humidity;
         
                         } else if (strcmp(topic_key, "temperature") == 0) {
-                            payload_buffer["timestamp"] = now;
+                            payload_buffer["timestamp"] = millis();
                             double temperature = get_dht_temperature();
                             payload_buffer["temperature_dht"] = temperature;
                             temperature = get_ds18b20_temperature();
                             payload_buffer["temperature_ds18b20"] = temperature;
                             // temperature = get_cpu_temp_in_c();
                             // payload_buffer["cpu_temperature"] = temperature;
+                        } else if (strcmp(topic_key, "flame") == 0) {
+                            payload_buffer["timestamp"] = millis();
+                            payload_buffer["flame_analog"] = get_flame_level_analog();
+                            payload_buffer["flame_digital_detected"] = is_flame_detected_digital();
+                        } else if (strcmp(topic_key, "fume") == 0) {
+                            payload_buffer["timestamp"] = millis();
+                            payload_buffer["fume_mq2"] = 0;
+                            payload_buffer["fume_mq135"] = 0;
                         }
                     
                         serializeJson(payload_buffer, payload_string);
-                        mqtt_client.publish(kv.value().as<const char*>(), payload_string.c_str());
+                        mqtt_client.publish(kv.value().as<const char*>(), 
+                            payload_string.c_str(), 
+                            true);
+                  
                     }
                     
                 }

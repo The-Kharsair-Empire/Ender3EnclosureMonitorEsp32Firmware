@@ -4,5 +4,6 @@
         "system_error": "cpp",
         "string": "cpp",
         "cmath": "cpp"
-    }
+    },
+    "cmake.configureOnOpen": false
 }

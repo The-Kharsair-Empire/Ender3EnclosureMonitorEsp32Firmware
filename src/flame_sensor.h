@@ -12,19 +12,47 @@
 
 bool is_flame_sensor_setup = false;
 
-float flame_level;
-int flame_detected;
+volatile float filtered_flame_level;
+float flame_analog_alpha = 0.2f;
+
+int flame_analog_sample_interval = 1000;
 
 void flame_sensor_setup() {
-    pinMode(FLAME_ANALOG, INPUT);
-    pinMode(FLAME_DIGITAL, INPUT);
-    is_flame_sensor_setup = true;
+    if (!is_flame_sensor_setup) {
+        pinMode(FLAME_ANALOG, INPUT);
+        pinMode(FLAME_DIGITAL, INPUT);
+        is_flame_sensor_setup = true;
+    }
 }
 
 bool is_flame_detected_digital() {
-    if (!is_flame_sensor_setup) flame_sensor_setup();
+    flame_sensor_setup();
     return digitalRead(FLAME_DIGITAL) == HIGH;
 }
+
+float get_flame_level_analog() {
+    return filtered_flame_level;
+}
+
+void analog_flame_sample_loop(void*) {
+    flame_sensor_setup();
+    while (isnan(analogRead(FLAME_ANALOG))) {
+        vTaskDelay(flame_analog_sample_interval / portTICK_PERIOD_MS);
+    }
+
+    filtered_flame_level = analogRead(FLAME_ANALOG);
+    
+
+    while (1) {
+        float flame = analogRead(FLAME_ANALOG);
+        if (!isnan(flame)) {
+            filtered_flame_level += (flame - filtered_flame_level) * flame_analog_alpha;
+        }
+        vTaskDelay(flame_analog_sample_interval / portTICK_PERIOD_MS);
+    }
+}
+
+
 
 // reference code from arduino test project below:
 

@@ -7,8 +7,8 @@
 #define DHT_DATA 16
 #define DHT_TYPE DHT22
 
-volatile double filtered_dht_temperature;
-volatile double filtered_dht_humidity;
+volatile float filtered_dht_temperature;
+volatile float filtered_dht_humidity;
 
 DHT dht22(DHT_DATA, DHT_TYPE);
 
@@ -20,11 +20,11 @@ unsigned int dht_sample_interval = 1000; // 1s
 // void update_settings() {} // changing alphas and interval from mqtt
 
 
-double get_dht_temperature() {
+float get_dht_temperature() {
     return filtered_dht_temperature;
 }
 
-double get_dht_humidity() {
+float get_dht_humidity() {
     return filtered_dht_humidity;
 }
 
