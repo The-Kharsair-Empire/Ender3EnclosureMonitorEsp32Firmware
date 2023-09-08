@@ -76,7 +76,7 @@ void start_emergency_stop_task() {
         NULL, 
         20,
         &emergency_stop_task_handle,
-        request_cpu
+        pro_cpu
     );
     
 }
